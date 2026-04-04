@@ -35,9 +35,16 @@ export interface DashboardStats {
     protein_goal: number;
     protein_pct: number;
   };
+  todayWorkouts: { total_workouts: number; total_minutes: number; total_calories: number };
   weeklyProtein: { date: string; total_protein: number }[];
   weightHistory: { date: string; weight: number }[];
+  allWeightHistory: { date: string; weight: number }[];
   latestWeight: number;
+  recentWorkouts: WorkoutEntry[];
+  weeklyWorkouts: { date: string; activity_type: string; duration_minutes: number; calories_burned: number }[];
+  workoutsByType: { activity_type: string; count: number; avg_duration: number; total_calories: number }[];
+  monthlyWorkoutStats: { total_workouts: number; total_minutes: number; total_calories: number; avg_duration: number };
+  workoutStreak: number;
 }
 
 export interface Meal {
@@ -64,4 +71,61 @@ export interface MealPlan {
   days: DayPlan[];
   shopping_list: string[];
   tips: string[];
+}
+
+export interface WorkoutEntry {
+  id: number;
+  date: string;
+  activity_type: string;
+  duration_minutes: number;
+  calories_burned: number;
+  distance?: number;
+  distance_unit?: string;
+  source: string;
+  notes?: string;
+}
+
+export interface ImportResult {
+  weights: number;
+  workouts: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface LabResult {
+  test_name: string;
+  value: string;
+  reference_range: string;
+  status: 'normal' | 'high' | 'low' | 'critical';
+  explanation: string;
+  improvement: string;
+}
+
+export interface HealthRecord {
+  id: number;
+  filename: string;
+  file_type: string;
+  record_date?: string;
+  category: string;
+  raw_text?: string;
+  summary?: string;
+  key_findings?: string[];
+  recommendations?: string[];
+  lab_results?: LabResult[];
+  analyzed_at?: string;
+  created_at: string;
+}
+
+export interface HealthRecordUploadResult {
+  results: Array<{
+    id?: number;
+    filename: string;
+    summary?: string;
+    key_findings?: string[];
+    recommendations?: string[];
+    lab_results?: LabResult[];
+    category?: string;
+    record_date?: string;
+    error?: string;
+  }>;
 }

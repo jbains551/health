@@ -1,4 +1,4 @@
-import type { Goals, WeightEntry, NutritionEntry, DashboardStats, MealPlan } from './types';
+import type { Goals, WeightEntry, NutritionEntry, DashboardStats, MealPlan, WorkoutEntry, ImportResult, HealthRecord, HealthRecordUploadResult } from './types';
 
 const BASE = '/api';
 
@@ -43,4 +43,40 @@ export const api = {
     request<{ plan: MealPlan; generated_at: string } | null>('/mealplan/latest'),
   generateMealPlan: () =>
     request<{ plan: MealPlan; generated_at: string }>('/mealplan/generate', { method: 'POST' }),
+
+  // Workouts
+  getWorkouts: (date?: string) =>
+    request<WorkoutEntry[]>('/workouts' + (date ? `?date=${date}` : '')),
+  addWorkout: (data: Omit<WorkoutEntry, 'id' | 'source'>) =>
+    request<WorkoutEntry>('/workouts', { method: 'POST', body: JSON.stringify(data) }),
+  deleteWorkout: (id: number) =>
+    request<{ success: boolean }>(`/workouts/${id}`, { method: 'DELETE' }),
+
+  // Apple Health Import
+  importAppleHealth: async (file: File): Promise<ImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE}/import/apple-health`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Import failed');
+    }
+    return res.json();
+  },
+
+  // Health Records
+  getHealthRecords: () => request<HealthRecord[]>('/health-records'),
+  getHealthRecord: (id: number) => request<HealthRecord>(`/health-records/${id}`),
+  deleteHealthRecord: (id: number) =>
+    request<{ success: boolean }>(`/health-records/${id}`, { method: 'DELETE' }),
+  uploadHealthRecords: async (files: File[]): Promise<HealthRecordUploadResult> => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    const res = await fetch(`${BASE}/health-records/upload`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Upload failed');
+    }
+    return res.json();
+  },
 };

@@ -134,9 +134,9 @@ export default function NutritionLog() {
             <span>Protein Goal: {Math.round(totals.protein)}g / {Math.round(proteinGoal)}g</span>
             <span className={proteinPct >= 100 ? 'text-emerald-400' : ''}>{Math.round(proteinPct)}%</span>
           </div>
-          <div className="w-full bg-slate-700 rounded-full h-2.5">
+          <div className="w-full bg-white/[0.06] rounded-full h-2.5 overflow-hidden">
             <div
-              className="h-2.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all"
+              className="h-2.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all progress-shimmer relative"
               style={{ width: `${proteinPct}%` }}
             />
           </div>
