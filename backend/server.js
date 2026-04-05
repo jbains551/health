@@ -566,18 +566,74 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
       if (r.changes > 0) results.workouts++;
       else results.skipped++;
     }
-    // Aggregate sleep stages per night and insert
+    // Deduplicate sleep intervals and aggregate per night
     const insertSleep = db.prepare(`
       INSERT OR REPLACE INTO sleep_entries (date, bedtime, wake_time, total_minutes, deep_minutes, rem_minutes, core_minutes, awake_minutes, source)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'apple_health')
     `);
     for (const [date, s] of sleepMap.entries()) {
-      const total = s.deep + s.rem + s.core + s.asleep + s.inBed;
-      if (total > 0) {
-        const r = insertSleep.run(date, s.bedtime, s.wakeTime, Math.round(total), Math.round(s.deep), Math.round(s.rem), Math.round(s.core), Math.round(s.awake));
-        if (r.changes > 0) results.sleep++;
-        else results.skipped++;
+      const intervals = s.intervals;
+      if (!intervals || intervals.length === 0) continue;
+
+      // Prefer Apple Watch data (has stages) over iPhone (usually just AsleepUnspecified)
+      const sources = [...new Set(intervals.map(i => i.source))];
+      const hasStages = intervals.some(i => ['deep', 'rem', 'core'].includes(i.stage));
+
+      // If we have staged data, filter out unspecified "asleep" records from other sources
+      let filtered = intervals;
+      if (hasStages) {
+        const stagedSources = [...new Set(intervals.filter(i => ['deep', 'rem', 'core'].includes(i.stage)).map(i => i.source))];
+        // Keep only records from sources that provide stages, plus awake from any source
+        filtered = intervals.filter(i =>
+          stagedSources.includes(i.source) || i.stage === 'awake'
+        );
       }
+
+      // Deduplicate overlapping intervals per stage by merging
+      const byStage = { deep: [], rem: [], core: [], asleep: [], awake: [] };
+      for (const iv of filtered) {
+        byStage[iv.stage].push({ start: iv.start, end: iv.end });
+      }
+
+      function mergeIntervals(ivs) {
+        if (ivs.length === 0) return 0;
+        ivs.sort((a, b) => a.start - b.start);
+        let total = 0;
+        let curStart = ivs[0].start, curEnd = ivs[0].end;
+        for (let i = 1; i < ivs.length; i++) {
+          if (ivs[i].start <= curEnd) {
+            curEnd = Math.max(curEnd, ivs[i].end);
+          } else {
+            total += (curEnd - curStart) / 60000;
+            curStart = ivs[i].start;
+            curEnd = ivs[i].end;
+          }
+        }
+        total += (curEnd - curStart) / 60000;
+        return total;
+      }
+
+      const deep = mergeIntervals(byStage.deep);
+      const rem = mergeIntervals(byStage.rem);
+      const core = mergeIntervals(byStage.core);
+      const asleep = mergeIntervals(byStage.asleep);
+      const awake = mergeIntervals(byStage.awake);
+      const totalSleep = deep + rem + core + asleep;
+      const total = totalSleep + awake;
+
+      if (total <= 0 || total > 840) continue; // skip if 0 or > 14 hours (bad data)
+
+      // Find bedtime and wake time
+      const allStarts = filtered.map(i => i.start);
+      const allEnds = filtered.map(i => i.end);
+      const bedtime = new Date(Math.min(...allStarts));
+      const wakeTime = new Date(Math.max(...allEnds));
+      const bedStr = bedtime.toTimeString().slice(0, 5);
+      const wakeStr = wakeTime.toTimeString().slice(0, 5);
+
+      const r2 = insertSleep.run(date, bedStr, wakeStr, Math.round(totalSleep), Math.round(deep), Math.round(rem), Math.round(core), Math.round(awake));
+      if (r2.changes > 0) results.sleep++;
+      else results.skipped++;
     }
   });
 
@@ -596,40 +652,52 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
           if (date && weight) weightRows.push({ date, weight });
         }
 
-        // Sleep analysis records
+        // Sleep analysis records — collect raw intervals for deduplication
         if (node.name === 'Record' && node.attributes.type === 'HKCategoryTypeIdentifierSleepAnalysis') {
           const startDate = node.attributes.startDate;
           const endDate = node.attributes.endDate;
           const value = node.attributes.value || '';
+          const sourceName = node.attributes.sourceName || '';
           if (!startDate || !endDate) return;
 
-          // Calculate duration in minutes
           const start = new Date(startDate.replace(' +', '+').replace(' -', '-'));
           const end = new Date(endDate.replace(' +', '+').replace(' -', '-'));
           const minutes = (end - start) / 60000;
-          if (minutes <= 0 || minutes > 1440) return; // skip invalid
+          if (minutes <= 0 || minutes > 1440) return;
 
-          // Use the end date as the sleep night date (wake-up date)
-          const nightDate = parseAppleHealthDate(endDate);
-          if (!nightDate) return;
+          // Skip InBed records — they overlap with actual sleep stage records
+          if (value.includes('InBed')) return;
+
+          // Determine stage type
+          let stage = 'asleep';
+          if (value.includes('AsleepDeep')) stage = 'deep';
+          else if (value.includes('AsleepREM')) stage = 'rem';
+          else if (value.includes('AsleepCore')) stage = 'core';
+          else if (value.includes('Awake')) stage = 'awake';
+
+          // Group by night — use the date when you went to sleep
+          // For sleep starting before 6pm, use that date; after 6pm, use next day (wake-up date)
+          const sleepHour = start.getHours();
+          let nightDate;
+          if (sleepHour >= 18) {
+            // Evening sleep — belongs to next day's "night"
+            const next = new Date(start);
+            next.setDate(next.getDate() + 1);
+            nightDate = next.toISOString().split('T')[0];
+          } else {
+            nightDate = start.toISOString().split('T')[0];
+          }
 
           if (!sleepMap.has(nightDate)) {
-            sleepMap.set(nightDate, { deep: 0, rem: 0, core: 0, asleep: 0, awake: 0, inBed: 0, bedtime: startDate.split(' ')[1] || null, wakeTime: endDate.split(' ')[1] || null });
+            sleepMap.set(nightDate, { intervals: [] });
           }
-          const entry = sleepMap.get(nightDate);
-
-          // Track earliest bedtime and latest wake time
-          const startTime = startDate.split(' ')[1];
-          const endTime = endDate.split(' ')[1];
-          if (startTime && (!entry.bedtime || startTime < entry.bedtime)) entry.bedtime = startTime;
-          if (endTime && (!entry.wakeTime || endTime > entry.wakeTime)) entry.wakeTime = endTime;
-
-          if (value.includes('AsleepDeep')) entry.deep += minutes;
-          else if (value.includes('AsleepREM')) entry.rem += minutes;
-          else if (value.includes('AsleepCore')) entry.core += minutes;
-          else if (value.includes('AsleepUnspecified') || value.includes('Asleep')) entry.asleep += minutes;
-          else if (value.includes('Awake')) entry.awake += minutes;
-          else if (value.includes('InBed')) entry.inBed += minutes;
+          sleepMap.get(nightDate).intervals.push({
+            start: start.getTime(),
+            end: end.getTime(),
+            stage,
+            source: sourceName,
+            minutes,
+          });
         }
 
         if (node.name === 'Workout') {

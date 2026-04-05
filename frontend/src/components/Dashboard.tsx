@@ -137,14 +137,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
   const sleepScore = lastSleep ? (() => {
     const t = lastSleep.total_minutes, d = lastSleep.deep_minutes, r = lastSleep.rem_minutes, a = lastSleep.awake_minutes;
     if (t <= 0) return 0;
-    let dur = t >= 420 && t <= 540 ? 40 : t >= 360 ? 30 + ((t - 360) / 60) * 10 : t >= 240 ? ((t - 240) / 120) * 30 : (t / 240) * 10;
-    if (t > 540) dur = Math.max(20, 40 - ((t - 540) / 60) * 10);
+    // Duration (35pts): ideal 420-480 min
+    let dur = 0;
+    if (t >= 420 && t <= 480) dur = 35;
+    else if (t > 480 && t <= 540) dur = 35 - ((t - 480) / 60) * 5;
+    else if (t >= 360) dur = 20 + ((t - 360) / 60) * 15;
+    else if (t >= 300) dur = 10 + ((t - 300) / 60) * 10;
+    else dur = Math.max(0, (t / 300) * 10);
+    // Deep (25pts): ideal 15-20%
     const dp = (d / t) * 100;
-    const ds = dp >= 15 && dp <= 25 ? 25 : dp >= 10 ? 15 + ((dp - 10) / 5) * 10 : dp > 25 ? Math.max(15, 25 - ((dp - 25) / 10) * 10) : (dp / 10) * 15;
+    const ds = dp >= 15 && dp <= 20 ? 25 : dp > 20 && dp <= 25 ? 22 : dp >= 10 ? 10 + ((dp - 10) / 5) * 15 : (dp / 10) * 10;
+    // REM (25pts): ideal 20-25%
     const rp = (r / t) * 100;
-    const rs = rp >= 20 && rp <= 25 ? 25 : rp >= 15 ? 15 + ((rp - 15) / 5) * 10 : rp > 25 ? Math.max(15, 25 - ((rp - 25) / 10) * 10) : (rp / 15) * 15;
-    const ap = (a / t) * 100;
-    const as2 = ap > 5 ? Math.max(0, 10 - ((ap - 5) / 15) * 10) : 10;
+    const rs = rp >= 20 && rp <= 25 ? 25 : rp >= 15 ? 12 + ((rp - 15) / 5) * 13 : (rp / 15) * 12;
+    // Awake penalty (15pts)
+    const ap = (a / (t + a)) * 100;
+    const as2 = ap > 3 ? Math.max(0, 15 - ((ap - 3) / 12) * 15) : 15;
     return Math.round(Math.min(100, dur + ds + rs + as2));
   })() : 0;
 

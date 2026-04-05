@@ -28,34 +28,38 @@ function pct(stage: number, total: number) {
 
 function calcSleepScore(total: number, deep: number, rem: number, awake: number): number {
   if (total <= 0) return 0;
-  // Duration score (40 points): ideal 420-540 min (7-9 hrs)
-  let duration = 0;
-  if (total >= 420 && total <= 540) duration = 40;
-  else if (total >= 360) duration = 30 + ((total - 360) / 60) * 10;
-  else if (total >= 240) duration = ((total - 240) / 120) * 30;
-  else duration = Math.max(0, (total / 240) * 10);
-  if (total > 540) duration = Math.max(20, 40 - ((total - 540) / 60) * 10);
 
-  // Deep sleep score (25 points): ideal 15-25% of total
+  // Duration score (35 points): ideal 420-480 min (7-8 hrs)
+  let duration = 0;
+  if (total >= 420 && total <= 480) duration = 35;
+  else if (total > 480 && total <= 540) duration = 35 - ((total - 480) / 60) * 5;
+  else if (total >= 360 && total < 420) duration = 20 + ((total - 360) / 60) * 15;
+  else if (total >= 300 && total < 360) duration = 10 + ((total - 300) / 60) * 10;
+  else if (total < 300) duration = Math.max(0, (total / 300) * 10);
+  else duration = Math.max(15, 30 - ((total - 540) / 60) * 10);
+
+  // Deep sleep score (25 points): ideal 15-20%
   const deepPct = (deep / total) * 100;
   let deepScore = 0;
-  if (deepPct >= 15 && deepPct <= 25) deepScore = 25;
-  else if (deepPct >= 10) deepScore = 15 + ((deepPct - 10) / 5) * 10;
-  else if (deepPct > 25) deepScore = Math.max(15, 25 - ((deepPct - 25) / 10) * 10);
-  else deepScore = Math.max(0, (deepPct / 10) * 15);
+  if (deepPct >= 15 && deepPct <= 20) deepScore = 25;
+  else if (deepPct > 20 && deepPct <= 25) deepScore = 22;
+  else if (deepPct >= 10 && deepPct < 15) deepScore = 10 + ((deepPct - 10) / 5) * 15;
+  else if (deepPct < 10) deepScore = (deepPct / 10) * 10;
+  else deepScore = Math.max(10, 22 - ((deepPct - 25) / 10) * 12);
 
-  // REM score (25 points): ideal 20-25% of total
+  // REM score (25 points): ideal 20-25%
   const remPct = (rem / total) * 100;
   let remScore = 0;
   if (remPct >= 20 && remPct <= 25) remScore = 25;
-  else if (remPct >= 15) remScore = 15 + ((remPct - 15) / 5) * 10;
-  else if (remPct > 25) remScore = Math.max(15, 25 - ((remPct - 25) / 10) * 10);
-  else remScore = Math.max(0, (remPct / 15) * 15);
+  else if (remPct >= 15 && remPct < 20) remScore = 12 + ((remPct - 15) / 5) * 13;
+  else if (remPct < 15) remScore = (remPct / 15) * 12;
+  else remScore = Math.max(10, 25 - ((remPct - 25) / 10) * 15);
 
-  // Awake score (10 points): less awake is better, ideal < 5%
-  const awakePct = (awake / total) * 100;
-  let awakeScore = 10;
-  if (awakePct > 5) awakeScore = Math.max(0, 10 - ((awakePct - 5) / 15) * 10);
+  // Awake penalty (15 points): ideal < 5% of time in bed
+  const totalInBed = total + awake;
+  const awakePct = (awake / totalInBed) * 100;
+  let awakeScore = 15;
+  if (awakePct > 3) awakeScore = Math.max(0, 15 - ((awakePct - 3) / 12) * 15);
 
   return Math.round(Math.min(100, duration + deepScore + remScore + awakeScore));
 }
