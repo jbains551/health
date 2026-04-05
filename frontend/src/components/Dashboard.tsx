@@ -179,7 +179,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
           icon={<Moon size={18} className="text-white" />}
           label="Last Night"
           value={lastSleep ? formatSleepMin(lastSleep.total_minutes) : '—'}
-          sub={lastSleep ? `Deep: ${formatSleepMin(lastSleep.deep_minutes)} · REM: ${formatSleepMin(lastSleep.rem_minutes)}` : 'No sleep data'}
+          sub={lastSleep ? `Deep: ${Math.round((lastSleep.deep_minutes / lastSleep.total_minutes) * 100)}% · REM: ${Math.round((lastSleep.rem_minutes / lastSleep.total_minutes) * 100)}%` : 'No sleep data'}
           gradient="from-indigo-500 to-purple-600 shadow-indigo-500/25"
         />
       </div>

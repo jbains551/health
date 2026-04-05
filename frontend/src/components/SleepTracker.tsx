@@ -21,6 +21,11 @@ function shortDay(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
 }
 
+function pct(stage: number, total: number) {
+  if (total <= 0) return '0%';
+  return `${Math.round((stage / total) * 100)}%`;
+}
+
 function sleepQuality(total: number): { label: string; color: string } {
   if (total >= 420) return { label: 'Excellent', color: 'text-emerald-400' };
   if (total >= 360) return { label: 'Good', color: 'text-blue-400' };
@@ -113,14 +118,14 @@ export default function SleepTracker() {
               <div className="w-9 h-9 mx-auto mb-2 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
                 <BedDouble size={18} />
               </div>
-              <p className="text-2xl font-bold text-indigo-400 stat-value">{formatMin(lastNight.deep_minutes)}</p>
+              <p className="text-2xl font-bold text-indigo-400 stat-value">{pct(lastNight.deep_minutes, lastNight.total_minutes)}</p>
               <p className="text-slate-600 text-xs mt-0.5">Deep Sleep</p>
             </div>
             <div className="bg-white/[0.03] rounded-xl p-4 text-center border border-white/[0.04]">
               <div className="w-9 h-9 mx-auto mb-2 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center text-white shadow-lg">
                 <Zap size={18} />
               </div>
-              <p className="text-2xl font-bold text-cyan-400 stat-value">{formatMin(lastNight.rem_minutes)}</p>
+              <p className="text-2xl font-bold text-cyan-400 stat-value">{pct(lastNight.rem_minutes, lastNight.total_minutes)}</p>
               <p className="text-slate-600 text-xs mt-0.5">REM Sleep</p>
             </div>
             <div className="bg-white/[0.03] rounded-xl p-4 text-center border border-white/[0.04]">
@@ -149,10 +154,10 @@ export default function SleepTracker() {
               )}
             </div>
             <div className="flex gap-4 mt-2 text-xs text-slate-500 justify-center">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Deep</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Core</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />REM</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500/50" />Awake</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Deep {pct(lastNight.deep_minutes, lastNight.total_minutes)}</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Core {pct(lastNight.core_minutes, lastNight.total_minutes)}</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />REM {pct(lastNight.rem_minutes, lastNight.total_minutes)}</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500/50" />Awake {pct(lastNight.awake_minutes, lastNight.total_minutes)}</span>
             </div>
           </div>
 
@@ -192,10 +197,10 @@ export default function SleepTracker() {
         <div className="grid grid-cols-5 gap-3">
           {[
             { label: 'Total', value: formatMin(avg.avg_total), color: 'text-purple-400' },
-            { label: 'Deep', value: formatMin(avg.avg_deep), color: 'text-indigo-400' },
-            { label: 'Core', value: formatMin(avg.avg_core), color: 'text-blue-400' },
-            { label: 'REM', value: formatMin(avg.avg_rem), color: 'text-cyan-400' },
-            { label: 'Awake', value: formatMin(avg.avg_awake), color: 'text-orange-400' },
+            { label: 'Deep', value: pct(avg.avg_deep, avg.avg_total), color: 'text-indigo-400' },
+            { label: 'Core', value: pct(avg.avg_core, avg.avg_total), color: 'text-blue-400' },
+            { label: 'REM', value: pct(avg.avg_rem, avg.avg_total), color: 'text-cyan-400' },
+            { label: 'Awake', value: pct(avg.avg_awake, avg.avg_total), color: 'text-orange-400' },
           ].map(item => (
             <div key={item.label} className="text-center">
               <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
@@ -217,8 +222,11 @@ export default function SleepTracker() {
               tickFormatter={(v) => `${Math.round(v / 60)}h`} />
             <Tooltip
               contentStyle={chartTooltipStyle}
-              formatter={(v: number, name: string) => [formatMin(v), name.charAt(0).toUpperCase() + name.slice(1)]}
-              labelFormatter={(_, payload) => payload?.[0] ? formatDate(payload[0].payload.date) : ''}
+              formatter={(v: number, name: string, props: { payload?: { total: number } }) => {
+                const total = props.payload?.total || 1;
+                return [`${Math.round((v / total) * 100)}%`, name.charAt(0).toUpperCase() + name.slice(1)];
+              }}
+              labelFormatter={(_, payload) => payload?.[0] ? `${formatDate(payload[0].payload.date)} — ${formatMin(payload[0].payload.total)}` : ''}
             />
             <Bar dataKey="deep" stackId="sleep" fill="#6366f1" radius={[0, 0, 0, 0]} />
             <Bar dataKey="core" stackId="sleep" fill="#3b82f6" radius={[0, 0, 0, 0]} />
@@ -256,10 +264,10 @@ export default function SleepTracker() {
                   <tr key={r.date} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
                     <td className="py-2.5 pr-3 text-white">{formatDate(r.date)}</td>
                     <td className={`py-2.5 pr-3 text-right font-semibold ${q.color}`}>{formatMin(r.total_minutes)}</td>
-                    <td className="py-2.5 pr-3 text-right text-indigo-400">{formatMin(r.deep_minutes)}</td>
-                    <td className="py-2.5 pr-3 text-right text-blue-400">{formatMin(r.core_minutes)}</td>
-                    <td className="py-2.5 pr-3 text-right text-cyan-400">{formatMin(r.rem_minutes)}</td>
-                    <td className="py-2.5 text-right text-orange-400">{formatMin(r.awake_minutes)}</td>
+                    <td className="py-2.5 pr-3 text-right text-indigo-400">{pct(r.deep_minutes, r.total_minutes)}</td>
+                    <td className="py-2.5 pr-3 text-right text-blue-400">{pct(r.core_minutes, r.total_minutes)}</td>
+                    <td className="py-2.5 pr-3 text-right text-cyan-400">{pct(r.rem_minutes, r.total_minutes)}</td>
+                    <td className="py-2.5 text-right text-orange-400">{pct(r.awake_minutes, r.total_minutes)}</td>
                   </tr>
                 );
               })}
