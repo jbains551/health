@@ -134,6 +134,19 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
     return h > 0 ? `${h}h ${min}m` : `${min}m`;
   };
   const lastSleep = sleepStats?.lastNight;
+  const sleepScore = lastSleep ? (() => {
+    const t = lastSleep.total_minutes, d = lastSleep.deep_minutes, r = lastSleep.rem_minutes, a = lastSleep.awake_minutes;
+    if (t <= 0) return 0;
+    let dur = t >= 420 && t <= 540 ? 40 : t >= 360 ? 30 + ((t - 360) / 60) * 10 : t >= 240 ? ((t - 240) / 120) * 30 : (t / 240) * 10;
+    if (t > 540) dur = Math.max(20, 40 - ((t - 540) / 60) * 10);
+    const dp = (d / t) * 100;
+    const ds = dp >= 15 && dp <= 25 ? 25 : dp >= 10 ? 15 + ((dp - 10) / 5) * 10 : dp > 25 ? Math.max(15, 25 - ((dp - 25) / 10) * 10) : (dp / 10) * 15;
+    const rp = (r / t) * 100;
+    const rs = rp >= 20 && rp <= 25 ? 25 : rp >= 15 ? 15 + ((rp - 15) / 5) * 10 : rp > 25 ? Math.max(15, 25 - ((rp - 25) / 10) * 10) : (rp / 15) * 15;
+    const ap = (a / t) * 100;
+    const as2 = ap > 5 ? Math.max(0, 10 - ((ap - 5) / 15) * 10) : 10;
+    return Math.round(Math.min(100, dur + ds + rs + as2));
+  })() : 0;
 
   return (
     <div className="space-y-6">
@@ -178,8 +191,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
         <StatCard
           icon={<Moon size={18} className="text-white" />}
           label="Last Night"
-          value={lastSleep ? formatSleepMin(lastSleep.total_minutes) : '—'}
-          sub={lastSleep ? `Deep: ${Math.round((lastSleep.deep_minutes / lastSleep.total_minutes) * 100)}% · REM: ${Math.round((lastSleep.rem_minutes / lastSleep.total_minutes) * 100)}%` : 'No sleep data'}
+          value={lastSleep ? `${sleepScore}/100` : '—'}
+          sub={lastSleep ? `${formatSleepMin(lastSleep.total_minutes)} · Deep ${Math.round((lastSleep.deep_minutes / lastSleep.total_minutes) * 100)}% · REM ${Math.round((lastSleep.rem_minutes / lastSleep.total_minutes) * 100)}%` : 'No sleep data'}
           gradient="from-indigo-500 to-purple-600 shadow-indigo-500/25"
         />
       </div>

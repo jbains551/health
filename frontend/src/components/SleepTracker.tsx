@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { Moon, Sun, Clock, Zap, BedDouble, TrendingUp } from 'lucide-react';
+import { Moon, Sun, Clock, Zap, BedDouble } from 'lucide-react';
 import { api } from '../api';
 import type { SleepStats } from '../types';
 
@@ -26,11 +26,45 @@ function pct(stage: number, total: number) {
   return `${Math.round((stage / total) * 100)}%`;
 }
 
-function sleepQuality(total: number): { label: string; color: string } {
-  if (total >= 420) return { label: 'Excellent', color: 'text-emerald-400' };
-  if (total >= 360) return { label: 'Good', color: 'text-blue-400' };
-  if (total >= 300) return { label: 'Fair', color: 'text-yellow-400' };
-  return { label: 'Poor', color: 'text-red-400' };
+function calcSleepScore(total: number, deep: number, rem: number, awake: number): number {
+  if (total <= 0) return 0;
+  // Duration score (40 points): ideal 420-540 min (7-9 hrs)
+  let duration = 0;
+  if (total >= 420 && total <= 540) duration = 40;
+  else if (total >= 360) duration = 30 + ((total - 360) / 60) * 10;
+  else if (total >= 240) duration = ((total - 240) / 120) * 30;
+  else duration = Math.max(0, (total / 240) * 10);
+  if (total > 540) duration = Math.max(20, 40 - ((total - 540) / 60) * 10);
+
+  // Deep sleep score (25 points): ideal 15-25% of total
+  const deepPct = (deep / total) * 100;
+  let deepScore = 0;
+  if (deepPct >= 15 && deepPct <= 25) deepScore = 25;
+  else if (deepPct >= 10) deepScore = 15 + ((deepPct - 10) / 5) * 10;
+  else if (deepPct > 25) deepScore = Math.max(15, 25 - ((deepPct - 25) / 10) * 10);
+  else deepScore = Math.max(0, (deepPct / 10) * 15);
+
+  // REM score (25 points): ideal 20-25% of total
+  const remPct = (rem / total) * 100;
+  let remScore = 0;
+  if (remPct >= 20 && remPct <= 25) remScore = 25;
+  else if (remPct >= 15) remScore = 15 + ((remPct - 15) / 5) * 10;
+  else if (remPct > 25) remScore = Math.max(15, 25 - ((remPct - 25) / 10) * 10);
+  else remScore = Math.max(0, (remPct / 15) * 15);
+
+  // Awake score (10 points): less awake is better, ideal < 5%
+  const awakePct = (awake / total) * 100;
+  let awakeScore = 10;
+  if (awakePct > 5) awakeScore = Math.max(0, 10 - ((awakePct - 5) / 15) * 10);
+
+  return Math.round(Math.min(100, duration + deepScore + remScore + awakeScore));
+}
+
+function scoreLabel(score: number): { label: string; color: string; ring: string } {
+  if (score >= 85) return { label: 'Excellent', color: 'text-emerald-400', ring: 'stroke-emerald-400' };
+  if (score >= 70) return { label: 'Good', color: 'text-blue-400', ring: 'stroke-blue-400' };
+  if (score >= 50) return { label: 'Fair', color: 'text-yellow-400', ring: 'stroke-yellow-400' };
+  return { label: 'Poor', color: 'text-red-400', ring: 'stroke-red-400' };
 }
 
 const chartTooltipStyle = {
@@ -76,7 +110,8 @@ export default function SleepTracker() {
 
   const { lastNight, recent } = stats;
   const avg = stats[range];
-  const quality = lastNight ? sleepQuality(lastNight.total_minutes) : null;
+  const lastScore = lastNight ? calcSleepScore(lastNight.total_minutes, lastNight.deep_minutes, lastNight.rem_minutes, lastNight.awake_minutes) : 0;
+  const lastScoreInfo = scoreLabel(lastScore);
 
   // Build stacked bar chart data
   const chartData = recent.map(r => ({
@@ -129,11 +164,16 @@ export default function SleepTracker() {
               <p className="text-slate-600 text-xs mt-0.5">REM Sleep</p>
             </div>
             <div className="bg-white/[0.03] rounded-xl p-4 text-center border border-white/[0.04]">
-              <div className="w-9 h-9 mx-auto mb-2 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg">
-                <TrendingUp size={18} />
+              <div className="relative w-16 h-16 mx-auto mb-1">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.5" fill="none" className={lastScoreInfo.ring} strokeWidth="3"
+                    strokeDasharray={`${lastScore * 0.975} 100`} strokeLinecap="round" />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${lastScoreInfo.color}`}>{lastScore}</span>
               </div>
-              <p className={`text-2xl font-bold stat-value ${quality?.color}`}>{quality?.label}</p>
-              <p className="text-slate-600 text-xs mt-0.5">Quality</p>
+              <p className={`text-xs font-medium ${lastScoreInfo.color}`}>{lastScoreInfo.label}</p>
+              <p className="text-slate-600 text-xs mt-0.5">Sleep Score</p>
             </div>
           </div>
 
@@ -250,6 +290,7 @@ export default function SleepTracker() {
             <thead>
               <tr className="text-slate-400 border-b border-white/[0.06]">
                 <th className="text-left py-2 pr-3">Date</th>
+                <th className="text-right py-2 pr-3">Score</th>
                 <th className="text-right py-2 pr-3">Total</th>
                 <th className="text-right py-2 pr-3">Deep</th>
                 <th className="text-right py-2 pr-3">Core</th>
@@ -259,11 +300,13 @@ export default function SleepTracker() {
             </thead>
             <tbody>
               {[...recent].reverse().map(r => {
-                const q = sleepQuality(r.total_minutes);
+                const s = calcSleepScore(r.total_minutes, r.deep_minutes, r.rem_minutes, r.awake_minutes);
+                const si = scoreLabel(s);
                 return (
                   <tr key={r.date} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
                     <td className="py-2.5 pr-3 text-white">{formatDate(r.date)}</td>
-                    <td className={`py-2.5 pr-3 text-right font-semibold ${q.color}`}>{formatMin(r.total_minutes)}</td>
+                    <td className={`py-2.5 pr-3 text-right font-bold ${si.color}`}>{s}</td>
+                    <td className="py-2.5 pr-3 text-right font-semibold text-white">{formatMin(r.total_minutes)}</td>
                     <td className="py-2.5 pr-3 text-right text-indigo-400">{pct(r.deep_minutes, r.total_minutes)}</td>
                     <td className="py-2.5 pr-3 text-right text-blue-400">{pct(r.core_minutes, r.total_minutes)}</td>
                     <td className="py-2.5 pr-3 text-right text-cyan-400">{pct(r.rem_minutes, r.total_minutes)}</td>
