@@ -135,7 +135,7 @@ export default function WeightTracker() {
                 domain={['dataMin - 2', 'dataMax + 2']}
               />
               <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }}
                 labelFormatter={formatDate}
                 formatter={(v: number) => [`${v} lbs`, 'Weight']}
               />
