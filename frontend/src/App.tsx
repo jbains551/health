@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Weight, UtensilsCrossed, CalendarDays, Apple, Stethoscope, Settings, Heart, MessageCircle } from 'lucide-react';
+import { Activity, Weight, UtensilsCrossed, CalendarDays, Apple, Stethoscope, Settings, Heart, MessageCircle, Moon } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import WeightTracker from './components/WeightTracker';
 import NutritionLog from './components/NutritionLog';
@@ -8,14 +8,16 @@ import AppleHealthImport from './components/AppleHealthImport';
 import HealthRecords from './components/HealthRecords';
 import GoalsSettings from './components/GoalsSettings';
 import HealthChat from './components/HealthChat';
+import SleepTracker from './components/SleepTracker';
 
-type Tab = 'dashboard' | 'weight' | 'nutrition' | 'meals' | 'records' | 'ask' | 'import' | 'goals';
+type Tab = 'dashboard' | 'weight' | 'nutrition' | 'meals' | 'sleep' | 'records' | 'ask' | 'import' | 'goals';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard',  label: 'Dashboard',  icon: <Activity size={17} /> },
   { id: 'weight',     label: 'Weight',     icon: <Weight size={17} /> },
   { id: 'nutrition',  label: 'Nutrition',  icon: <UtensilsCrossed size={17} /> },
   { id: 'meals',      label: 'Meal Plans', icon: <CalendarDays size={17} /> },
+  { id: 'sleep',      label: 'Sleep',      icon: <Moon size={17} /> },
   { id: 'records',    label: 'Records',    icon: <Stethoscope size={17} /> },
   { id: 'ask',        label: 'Ask AI',     icon: <MessageCircle size={17} /> },
   { id: 'import',     label: 'Import',     icon: <Apple size={17} /> },
@@ -72,6 +74,7 @@ export default function App() {
         {active === 'weight'     && <WeightTracker />}
         {active === 'nutrition'  && <NutritionLog />}
         {active === 'meals'      && <MealPlanner />}
+        {active === 'sleep'      && <SleepTracker />}
         {active === 'records'    && <HealthRecords />}
         {active === 'ask'        && <HealthChat />}
         {active === 'import'     && <AppleHealthImport onImportComplete={() => {}} />}

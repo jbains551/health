@@ -1,4 +1,4 @@
-import type { Goals, WeightEntry, NutritionEntry, DashboardStats, MealPlan, WorkoutEntry, ImportResult, HealthRecord, HealthRecordUploadResult } from './types';
+import type { Goals, WeightEntry, NutritionEntry, DashboardStats, MealPlan, WorkoutEntry, ImportResult, HealthRecord, HealthRecordUploadResult, SleepEntry, SleepStats } from './types';
 
 const BASE = '/api';
 
@@ -69,6 +69,14 @@ export const api = {
   getHealthRecord: (id: number) => request<HealthRecord>(`/health-records/${id}`),
   deleteHealthRecord: (id: number) =>
     request<{ success: boolean }>(`/health-records/${id}`, { method: 'DELETE' }),
+  // Sleep
+  getSleep: (days?: number) => request<SleepEntry[]>(`/sleep${days ? `?days=${days}` : ''}`),
+  getSleepStats: () => request<SleepStats>('/sleep/stats'),
+  addSleep: (data: Omit<SleepEntry, 'id' | 'source'>) =>
+    request<SleepEntry>('/sleep', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSleep: (id: number) =>
+    request<{ success: boolean }>(`/sleep/${id}`, { method: 'DELETE' }),
+
   // Health Q&A
   askHealth: (question: string, history: { role: string; content: string }[]) =>
     request<{ answer: string }>('/ask', { method: 'POST', body: JSON.stringify({ question, history }) }),

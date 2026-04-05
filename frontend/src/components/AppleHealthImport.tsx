@@ -130,7 +130,7 @@ export default function AppleHealthImport({ onImportComplete }: { onImportComple
             <CheckCircle size={22} className="text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-white font-semibold">Import complete!</p>
-              <div className="grid grid-cols-3 gap-4 mt-3">
+              <div className="grid grid-cols-4 gap-4 mt-3">
                 <div className="text-center bg-slate-700/50 rounded-xl py-3">
                   <p className="text-2xl font-bold text-emerald-400">{result.weights}</p>
                   <p className="text-slate-400 text-xs">Weight entries</p>
@@ -138,6 +138,10 @@ export default function AppleHealthImport({ onImportComplete }: { onImportComple
                 <div className="text-center bg-slate-700/50 rounded-xl py-3">
                   <p className="text-2xl font-bold text-blue-400">{result.workouts}</p>
                   <p className="text-slate-400 text-xs">Workouts</p>
+                </div>
+                <div className="text-center bg-slate-700/50 rounded-xl py-3">
+                  <p className="text-2xl font-bold text-purple-400">{result.sleep}</p>
+                  <p className="text-slate-400 text-xs">Sleep nights</p>
                 </div>
                 <div className="text-center bg-slate-700/50 rounded-xl py-3">
                   <p className="text-2xl font-bold text-slate-400">{result.skipped}</p>

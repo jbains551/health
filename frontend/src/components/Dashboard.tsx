@@ -4,9 +4,9 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell,
   AreaChart, Area,
 } from 'recharts';
-import { TrendingDown, Zap, Target, Dumbbell, Flame, Timer, Trophy, Activity } from 'lucide-react';
+import { TrendingDown, Zap, Target, Dumbbell, Flame, Timer, Trophy, Activity, Moon } from 'lucide-react';
 import { api } from '../api';
-import type { DashboardStats } from '../types';
+import type { DashboardStats, SleepStats } from '../types';
 
 const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const PIE_COLORS = ['#10b981', '#06b6d4', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -45,13 +45,17 @@ function StatCard({
 
 export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [sleepStats, setSleepStats] = useState<SleepStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [weightRange, setWeightRange] = useState<'30' | '90' | 'all'>('30');
 
   useEffect(() => {
-    api.getStats()
-      .then(setStats)
+    Promise.all([
+      api.getStats(),
+      api.getSleepStats().catch(() => null),
+    ])
+      .then(([s, sl]) => { setStats(s); setSleepStats(sl); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -124,6 +128,13 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
   const totalToLose = startWeight - goals.goal_weight;
   const progressPct = totalToLose > 0 ? Math.min(100, (totalLost / totalToLose) * 100) : 0;
 
+  const formatSleepMin = (m: number) => {
+    const h = Math.floor(m / 60);
+    const min = Math.round(m % 60);
+    return h > 0 ? `${h}h ${min}m` : `${min}m`;
+  };
+  const lastSleep = sleepStats?.lastNight;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -135,7 +146,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
       </div>
 
       {/* Top Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           icon={<TrendingDown size={18} className="text-white" />}
           label="Weight"
@@ -163,6 +174,13 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
           value={todayWorkouts.total_calories.toLocaleString()}
           sub={todayWorkouts.total_workouts > 0 ? `${todayWorkouts.total_workouts} workout(s), ${todayWorkouts.total_minutes} min` : 'No workouts yet today'}
           gradient="from-orange-500 to-red-500 shadow-orange-500/25"
+        />
+        <StatCard
+          icon={<Moon size={18} className="text-white" />}
+          label="Last Night"
+          value={lastSleep ? formatSleepMin(lastSleep.total_minutes) : '—'}
+          sub={lastSleep ? `Deep: ${formatSleepMin(lastSleep.deep_minutes)} · REM: ${formatSleepMin(lastSleep.rem_minutes)}` : 'No sleep data'}
+          gradient="from-indigo-500 to-purple-600 shadow-indigo-500/25"
         />
       </div>
 

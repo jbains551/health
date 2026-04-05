@@ -85,9 +85,31 @@ export interface WorkoutEntry {
   notes?: string;
 }
 
+export interface SleepEntry {
+  id: number;
+  date: string;
+  bedtime?: string;
+  wake_time?: string;
+  total_minutes: number;
+  deep_minutes: number;
+  rem_minutes: number;
+  core_minutes: number;
+  awake_minutes: number;
+  source: string;
+  notes?: string;
+}
+
+export interface SleepStats {
+  week: { avg_total: number; avg_deep: number; avg_rem: number; avg_core: number; avg_awake: number; nights: number };
+  month: { avg_total: number; avg_deep: number; avg_rem: number; avg_core: number; avg_awake: number; nights: number };
+  recent: { date: string; total_minutes: number; deep_minutes: number; rem_minutes: number; core_minutes: number; awake_minutes: number; bedtime?: string; wake_time?: string }[];
+  lastNight: SleepEntry | null;
+}
+
 export interface ImportResult {
   weights: number;
   workouts: number;
+  sleep: number;
   skipped: number;
   errors: string[];
 }

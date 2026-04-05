@@ -80,6 +80,22 @@ db.exec(`
     created_at    TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS sleep_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    date            TEXT NOT NULL,
+    bedtime         TEXT,
+    wake_time       TEXT,
+    total_minutes   REAL DEFAULT 0,
+    deep_minutes    REAL DEFAULT 0,
+    rem_minutes     REAL DEFAULT 0,
+    core_minutes    REAL DEFAULT 0,
+    awake_minutes   REAL DEFAULT 0,
+    source          TEXT DEFAULT 'manual',
+    notes           TEXT,
+    created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(date, bedtime)
+  );
+
   CREATE TABLE IF NOT EXISTS workouts (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     date                TEXT NOT NULL,
@@ -439,6 +455,72 @@ app.delete('/api/workouts/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Sleep ──────────────────────────────────────────────────────────────────
+app.get('/api/sleep', (req, res) => {
+  const { days } = req.query;
+  const limit = parseInt(days) || 30;
+  res.json(db.prepare(`
+    SELECT * FROM sleep_entries
+    WHERE date >= date('now', '-' || ? || ' days')
+    ORDER BY date DESC
+  `).all(limit));
+});
+
+app.get('/api/sleep/stats', (req, res) => {
+  const week = db.prepare(`
+    SELECT
+      COALESCE(ROUND(AVG(total_minutes), 0), 0) AS avg_total,
+      COALESCE(ROUND(AVG(deep_minutes), 0), 0) AS avg_deep,
+      COALESCE(ROUND(AVG(rem_minutes), 0), 0) AS avg_rem,
+      COALESCE(ROUND(AVG(core_minutes), 0), 0) AS avg_core,
+      COALESCE(ROUND(AVG(awake_minutes), 0), 0) AS avg_awake,
+      COUNT(*) AS nights
+    FROM sleep_entries WHERE date >= date('now', '-7 days')
+  `).get();
+
+  const month = db.prepare(`
+    SELECT
+      COALESCE(ROUND(AVG(total_minutes), 0), 0) AS avg_total,
+      COALESCE(ROUND(AVG(deep_minutes), 0), 0) AS avg_deep,
+      COALESCE(ROUND(AVG(rem_minutes), 0), 0) AS avg_rem,
+      COALESCE(ROUND(AVG(core_minutes), 0), 0) AS avg_core,
+      COALESCE(ROUND(AVG(awake_minutes), 0), 0) AS avg_awake,
+      COUNT(*) AS nights
+    FROM sleep_entries WHERE date >= date('now', '-30 days')
+  `).get();
+
+  const recent = db.prepare(`
+    SELECT date, total_minutes, deep_minutes, rem_minutes, core_minutes, awake_minutes, bedtime, wake_time
+    FROM sleep_entries
+    WHERE date >= date('now', '-14 days')
+    ORDER BY date
+  `).all();
+
+  const lastNight = db.prepare(`
+    SELECT * FROM sleep_entries ORDER BY date DESC LIMIT 1
+  `).get();
+
+  res.json({ week, month, recent, lastNight });
+});
+
+app.post('/api/sleep', (req, res) => {
+  const { date, bedtime, wake_time, total_minutes, deep_minutes, rem_minutes, core_minutes, awake_minutes, notes } = req.body;
+  try {
+    const result = db.prepare(`
+      INSERT OR REPLACE INTO sleep_entries (date, bedtime, wake_time, total_minutes, deep_minutes, rem_minutes, core_minutes, awake_minutes, source, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)
+    `).run(date, bedtime || null, wake_time || null, total_minutes || 0, deep_minutes || 0, rem_minutes || 0, core_minutes || 0, awake_minutes || 0, notes || null);
+    res.json({ id: result.lastInsertRowid, ...req.body });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/sleep/:id', (req, res) => {
+  db.prepare('DELETE FROM sleep_entries WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 // ─── Apple Health Import ─────────────────────────────────────────────────────
 const upload = multer({ dest: join(__dirname, 'uploads/'), limits: { fileSize: 500 * 1024 * 1024 } });
 
@@ -463,7 +545,7 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const filePath = req.file.path;
-  const results = { weights: 0, workouts: 0, skipped: 0, errors: [] };
+  const results = { weights: 0, workouts: 0, sleep: 0, skipped: 0, errors: [] };
 
   const insertWeight = db.prepare(
     'INSERT OR IGNORE INTO weights (date, weight, notes) VALUES (?, ?, ?)'
@@ -473,7 +555,7 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
     VALUES (?, ?, ?, ?, ?, ?, 'apple_health')
   `);
 
-  const processInTransaction = db.transaction((weightRows, workoutRows) => {
+  const processInTransaction = db.transaction((weightRows, workoutRows, sleepMap) => {
     for (const w of weightRows) {
       const r = insertWeight.run(w.date, w.weight, 'Imported from Apple Health');
       if (r.changes > 0) results.weights++;
@@ -484,6 +566,19 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
       if (r.changes > 0) results.workouts++;
       else results.skipped++;
     }
+    // Aggregate sleep stages per night and insert
+    const insertSleep = db.prepare(`
+      INSERT OR REPLACE INTO sleep_entries (date, bedtime, wake_time, total_minutes, deep_minutes, rem_minutes, core_minutes, awake_minutes, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'apple_health')
+    `);
+    for (const [date, s] of sleepMap.entries()) {
+      const total = s.deep + s.rem + s.core + s.asleep + s.inBed;
+      if (total > 0) {
+        const r = insertSleep.run(date, s.bedtime, s.wakeTime, Math.round(total), Math.round(s.deep), Math.round(s.rem), Math.round(s.core), Math.round(s.awake));
+        if (r.changes > 0) results.sleep++;
+        else results.skipped++;
+      }
+    }
   });
 
   function parseXmlStream(stream) {
@@ -491,12 +586,50 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
       const parser = sax.createStream(true, { trim: true });
       const weightRows = [];
       const workoutRows = [];
+      // Aggregate sleep stages per night: key = date the sleep period ends (wake date)
+      const sleepMap = new Map();
 
       parser.on('opentag', (node) => {
         if (node.name === 'Record' && node.attributes.type === 'HKQuantityTypeIdentifierBodyMass') {
           const date = parseAppleHealthDate(node.attributes.startDate);
           const weight = convertWeight(node.attributes.value, node.attributes.unit);
           if (date && weight) weightRows.push({ date, weight });
+        }
+
+        // Sleep analysis records
+        if (node.name === 'Record' && node.attributes.type === 'HKCategoryTypeIdentifierSleepAnalysis') {
+          const startDate = node.attributes.startDate;
+          const endDate = node.attributes.endDate;
+          const value = node.attributes.value || '';
+          if (!startDate || !endDate) return;
+
+          // Calculate duration in minutes
+          const start = new Date(startDate.replace(' +', '+').replace(' -', '-'));
+          const end = new Date(endDate.replace(' +', '+').replace(' -', '-'));
+          const minutes = (end - start) / 60000;
+          if (minutes <= 0 || minutes > 1440) return; // skip invalid
+
+          // Use the end date as the sleep night date (wake-up date)
+          const nightDate = parseAppleHealthDate(endDate);
+          if (!nightDate) return;
+
+          if (!sleepMap.has(nightDate)) {
+            sleepMap.set(nightDate, { deep: 0, rem: 0, core: 0, asleep: 0, awake: 0, inBed: 0, bedtime: startDate.split(' ')[1] || null, wakeTime: endDate.split(' ')[1] || null });
+          }
+          const entry = sleepMap.get(nightDate);
+
+          // Track earliest bedtime and latest wake time
+          const startTime = startDate.split(' ')[1];
+          const endTime = endDate.split(' ')[1];
+          if (startTime && (!entry.bedtime || startTime < entry.bedtime)) entry.bedtime = startTime;
+          if (endTime && (!entry.wakeTime || endTime > entry.wakeTime)) entry.wakeTime = endTime;
+
+          if (value.includes('AsleepDeep')) entry.deep += minutes;
+          else if (value.includes('AsleepREM')) entry.rem += minutes;
+          else if (value.includes('AsleepCore')) entry.core += minutes;
+          else if (value.includes('AsleepUnspecified') || value.includes('Asleep')) entry.asleep += minutes;
+          else if (value.includes('Awake')) entry.awake += minutes;
+          else if (value.includes('InBed')) entry.inBed += minutes;
         }
 
         if (node.name === 'Workout') {
@@ -523,7 +656,7 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
       });
 
       parser.on('end', () => {
-        processInTransaction(weightRows, workoutRows);
+        processInTransaction(weightRows, workoutRows, sleepMap);
         resolve();
       });
 
