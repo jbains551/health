@@ -140,6 +140,13 @@ app.post('/api/weight', (req, res) => {
     const result = db.prepare(
       'INSERT OR REPLACE INTO weights (date, weight, notes) VALUES (?, ?, ?)'
     ).run(date, weight, notes || null);
+
+    // Keep goals.current_weight in sync with the latest weight entry
+    const latest = db.prepare('SELECT weight FROM weights ORDER BY date DESC LIMIT 1').get();
+    if (latest) {
+      db.prepare('UPDATE goals SET current_weight = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run(latest.weight);
+    }
+
     res.json({ id: result.lastInsertRowid, date, weight, notes });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -148,6 +155,13 @@ app.post('/api/weight', (req, res) => {
 
 app.delete('/api/weight/:id', (req, res) => {
   db.prepare('DELETE FROM weights WHERE id = ?').run(req.params.id);
+
+  // Keep goals.current_weight in sync with the latest weight entry
+  const latest = db.prepare('SELECT weight FROM weights ORDER BY date DESC LIMIT 1').get();
+  if (latest) {
+    db.prepare('UPDATE goals SET current_weight = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run(latest.weight);
+  }
+
   res.json({ success: true });
 });
 
@@ -535,6 +549,12 @@ app.post('/api/import/apple-health', upload.single('file'), async (req, res) => 
       await parseXmlStream(exportFile.stream());
     } else {
       await parseXmlStream(createReadStream(filePath));
+    }
+
+    // Keep goals.current_weight in sync after import
+    const latestW = db.prepare('SELECT weight FROM weights ORDER BY date DESC LIMIT 1').get();
+    if (latestW) {
+      db.prepare('UPDATE goals SET current_weight = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run(latestW.weight);
     }
 
     await unlink(filePath);
