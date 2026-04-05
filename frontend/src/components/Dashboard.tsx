@@ -245,8 +245,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
             <AreaChart data={weightChartData}>
               <defs>
                 <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -264,10 +264,10 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
                 formatter={(v: number) => [`${v} lbs`, 'Weight']} />
               <ReferenceLine
                 y={goals.goal_weight}
-                stroke="#3b82f6" strokeDasharray="5 3" strokeWidth={1.5}
-                label={{ value: `Goal: ${goals.goal_weight}`, fill: '#3b82f6', fontSize: 11, position: 'insideRight' }}
+                stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5}
+                label={{ value: `Goal: ${goals.goal_weight}`, fill: '#f59e0b', fontSize: 11, position: 'insideRight' }}
               />
-              <Area type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5} fill="url(#weightGrad)" />
+              <Area type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={2.5} fill="url(#weightGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         )}
