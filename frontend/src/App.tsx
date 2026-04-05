@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Weight, UtensilsCrossed, CalendarDays, Apple, Stethoscope, Settings, Heart } from 'lucide-react';
+import { Activity, Weight, UtensilsCrossed, CalendarDays, Apple, Stethoscope, Settings, Heart, MessageCircle } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import WeightTracker from './components/WeightTracker';
 import NutritionLog from './components/NutritionLog';
@@ -7,8 +7,9 @@ import MealPlanner from './components/MealPlanner';
 import AppleHealthImport from './components/AppleHealthImport';
 import HealthRecords from './components/HealthRecords';
 import GoalsSettings from './components/GoalsSettings';
+import HealthChat from './components/HealthChat';
 
-type Tab = 'dashboard' | 'weight' | 'nutrition' | 'meals' | 'records' | 'import' | 'goals';
+type Tab = 'dashboard' | 'weight' | 'nutrition' | 'meals' | 'records' | 'ask' | 'import' | 'goals';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard',  label: 'Dashboard',  icon: <Activity size={17} /> },
@@ -16,6 +17,7 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'nutrition',  label: 'Nutrition',  icon: <UtensilsCrossed size={17} /> },
   { id: 'meals',      label: 'Meal Plans', icon: <CalendarDays size={17} /> },
   { id: 'records',    label: 'Records',    icon: <Stethoscope size={17} /> },
+  { id: 'ask',        label: 'Ask AI',     icon: <MessageCircle size={17} /> },
   { id: 'import',     label: 'Import',     icon: <Apple size={17} /> },
   { id: 'goals',      label: 'Goals',      icon: <Settings size={17} /> },
 ];
@@ -71,6 +73,7 @@ export default function App() {
         {active === 'nutrition'  && <NutritionLog />}
         {active === 'meals'      && <MealPlanner />}
         {active === 'records'    && <HealthRecords />}
+        {active === 'ask'        && <HealthChat />}
         {active === 'import'     && <AppleHealthImport onImportComplete={() => {}} />}
         {active === 'goals'      && <GoalsSettings />}
       </main>

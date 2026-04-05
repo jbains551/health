@@ -20,7 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173', 'http://187.77.86.51'] }));
 app.use(express.json());
 
 // ─── Database Setup ───────────────────────────────────────────────────────────
@@ -742,6 +742,76 @@ Return ONLY valid JSON (no markdown, no extra text):
   }
 
   res.json({ results });
+});
+
+// ─── Health Q&A (Ask AI) ────────────────────────────────────────────────────
+app.post('/api/ask', async (req, res) => {
+  const { question, history } = req.body;
+  if (!question) return res.status(400).json({ error: 'No question provided' });
+
+  // Gather user context for personalized answers
+  const goals = db.prepare('SELECT * FROM goals WHERE id = 1').get();
+  const latestWeight = db.prepare('SELECT weight FROM weights ORDER BY date DESC LIMIT 1').get();
+  const currentWeight = latestWeight?.weight || goals.current_weight;
+  const proteinGoal = Math.round(currentWeight * goals.protein_per_lb);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayNutrition = db.prepare(`
+    SELECT COALESCE(SUM(calories),0) AS cals, COALESCE(SUM(protein),0) AS protein,
+           COALESCE(SUM(carbs),0) AS carbs, COALESCE(SUM(fat),0) AS fat
+    FROM nutrition_logs WHERE date = ?
+  `).get(todayStr);
+
+  const recentWorkouts = db.prepare(`
+    SELECT activity_type, duration_minutes, date FROM workouts
+    ORDER BY date DESC LIMIT 10
+  `).all();
+
+  const systemPrompt = `You are a knowledgeable, friendly health and fitness assistant integrated into a personal health tracking app. You provide evidence-based advice tailored to the user's specific data and goals.
+
+IMPORTANT: Always note that you are an AI assistant and your responses are not a substitute for professional medical advice. For serious health concerns, always recommend consulting a healthcare provider.
+
+User profile:
+- Current weight: ${currentWeight} lbs, Goal weight: ${goals.goal_weight} lbs
+- Daily protein target: ${proteinGoal}g (${goals.protein_per_lb}g per lb bodyweight)
+- Workout schedule: ${goals.workout_days} (high-intensity, 1 hour each)
+- Goal: Body recomposition — gain muscle while losing belly fat
+- Today's intake so far: ${Math.round(todayNutrition.cals)} cal, ${Math.round(todayNutrition.protein)}g protein, ${Math.round(todayNutrition.carbs)}g carbs, ${Math.round(todayNutrition.fat)}g fat
+- Recent workouts: ${recentWorkouts.map(w => `${w.activity_type} (${Math.round(w.duration_minutes)} min) on ${w.date}`).join(', ') || 'none logged'}
+
+Guidelines:
+- Give specific, actionable advice personalized to the user's data above
+- For nutrition questions, reference their protein/calorie targets
+- For exercise questions, consider their existing workout schedule
+- Keep answers concise but thorough — use bullet points for clarity
+- When discussing supplements or dietary changes, mention both benefits and potential risks
+- For medical symptoms or conditions, always recommend seeing a doctor while providing general educational information`;
+
+  // Build messages with conversation history
+  const messages = [];
+  if (history && Array.isArray(history)) {
+    for (const msg of history.slice(-10)) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+  }
+  messages.push({ role: 'user', content: question });
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages,
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    if (!textBlock) throw new Error('No text in response');
+
+    res.json({ answer: textBlock.text });
+  } catch (err) {
+    console.error('Health Q&A error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => console.log(`Health Tracker API → http://localhost:${PORT}`));

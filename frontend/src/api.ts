@@ -69,6 +69,10 @@ export const api = {
   getHealthRecord: (id: number) => request<HealthRecord>(`/health-records/${id}`),
   deleteHealthRecord: (id: number) =>
     request<{ success: boolean }>(`/health-records/${id}`, { method: 'DELETE' }),
+  // Health Q&A
+  askHealth: (question: string, history: { role: string; content: string }[]) =>
+    request<{ answer: string }>('/ask', { method: 'POST', body: JSON.stringify({ question, history }) }),
+
   uploadHealthRecords: async (files: File[]): Promise<HealthRecordUploadResult> => {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
